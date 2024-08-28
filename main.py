@@ -6,6 +6,7 @@ import os
 import configparser
 import datetime
 import feedparser
+import pip telebot
 
 config = configparser.ConfigParser()
 config.read('settings.ini')
