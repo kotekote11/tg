@@ -1,3 +1,5 @@
+import pip
+pip.main(['install', 'telebot'])
 import telebot
 import requests
 from bs4 import BeautifulSoup
@@ -6,9 +8,6 @@ import os
 import configparser
 import datetime
 import feedparser
-
-import pip
-pip.main(['install', 'telebot'])
 
 config = configparser.ConfigParser()
 config.read('settings.ini')
