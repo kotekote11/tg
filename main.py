@@ -1,18 +1,28 @@
-from aiogram import Bot, Dispatcher, executor, types
+import telebot
+import requests
+from bs4 import BeautifulSoup
+import time
+import os
 
-bot = Bot('5700959339:AAEXSEfnjDg6zrl7bLUN1W_ISJtF6FiKd_0')
-dp = Dispatcher(bot=bot)
+CHANNEL_ID = '@tmanybottest'
+NEWS_URL = 'https://t.me/s/rybar?q=%23дайджест'
+bot = telebot.TeleBot(os.environ['tt'])
+sent_news = set()
 
+def send_news():
+    response = requests.get(NEWS_URL)
+    soup = BeautifulSoup(response.text.replace("<br/>", "\n"), 'html.parser')
+    news = soup.find_all('div', class_='tgme_widget_message_text js-message_text')
+    for item in news:
+        news_text = item.text.strip()
+        if news_text not in sent_news:
+            bot.send_message(CHANNEL_ID, news_text)
+            sent_news.add(news_text)
+        time.sleep(1)
 
-@dp.message_handler(commands=['start'])
-async def cmd_start(message: types.Message):
-    await message.answer(f'{message.from_user.first_name}, добро пожаловать в магазин кроссовок!')
-
-
-@dp.message_handler()
-async def answer(message: types.Message):
-    await message.reply('Я тебя не понимаю.')
-
-
-if __name__ == '__main__':
-    executor.start_polling(dp)
+while True:
+    try:
+        send_news()
+        time.sleep(5 * 60)
+    except Exception as e:
+        print('Ошибка:', e)
