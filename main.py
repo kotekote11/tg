@@ -1,6 +1,6 @@
 from aiogram import Bot, Dispatcher, executor, types
 
-bot = Bot('6088099037:AAH-Ts7oJdlvCGxxvl3GbJLJwD6pC3QJkEw')
+bot = Bot('5700959339:AAEXSEfnjDg6zrl7bLUN1W_ISJtF6FiKd_0')
 dp = Dispatcher(bot=bot)
 
 
