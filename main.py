@@ -1,77 +1,42 @@
-import pip
-pip.main(['install', 'telebot'])
-import telebot
-import requests
-from bs4 import BeautifulSoup
-import time
-import os
-import configparser
-import datetime
-import feedparser
+# Importing Required Libraries, Imported os Module For Security 
+import os, telebot
 
-config = configparser.ConfigParser()
-config.read('settings.ini')
-DATETIME = config.get('rybar', 'DATETIME')
+# Getting Bot Token From Secrets
+BOT_TOKEN = os.environ.get('6332757892:')
 
-CHANNEL_ID = '@tmanybottest'
-NEWS_URL = 'https://t.me/s/rybar?q=%23дайджест'
-bot = telebot.TeleBot(os.environ['tt'])
-sent_news = set()
+# Creating Telebot Object
+bot = telebot.TeleBot(BOT_TOKEN)
 
-def send_news():
-    response = requests.get(NEWS_URL)
-    soup = BeautifulSoup(response.text.replace("<br/>", "\n"), 'html.parser')
-    news = soup.find_all('div', class_='tgme_widget_message_text js-message_text')
-    dates = soup.find_all('time')
+# Whenever Starting Bot
+@bot.message_handler(commands=['start', 'hello'])
+def send_welcome(message):
+  
+  # Inline Button
+  markup = telebot.types.InlineKeyboardMarkup()
+  markup.add(telebot.types.InlineKeyboardButton("Use Template", url="https://replit.com/@krbishnoi46/Python-Telegram-Bot"))
 
-    for n, item in enumerate(news):
-        news_text = item.text.strip()
-        news_date = dates[n].text.strip()
-        if news_text not in sent_news:
-            bot.send_message(CHANNEL_ID, news_text)
-            sent_news.add(news_text)
-            time.sleep(1)
+  # Reply Keyboard Button
+  # markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=3)
+  # markup.add(telebot.types.KeyboardButton("Reply Keyboard Button"))
+  
+  markdown = f"""Hey *{message.chat.first_name}* Welcome To *KR's Python Telegram Bot Template*.\n\nYou Can Use This Template By Visiting Our Template Page From This Below Button"""
+  
+  bot.reply_to(message, markdown, parse_mode="Markdown", reply_markup=markup)
+  print(f"Welcome Message Sent To {message.chat.first_name}\n")
 
-            # Update the DATETIME value in the settings.ini file
-            post_time = datetime.datetime.now()  # Get the current timestamp
-            new_datetime = post_time.strftime('%Y-%m-%d %H:%M:%S%z')
-            print('New datetime:', new_datetime)
-            config.set('rybar', 'DATETIME', new_datetime)
-            with open('settings.ini', 'w') as config_file:
-                config.write(config_file)
+# Handle Documents
+@bot.message_handler(func=lambda m: True, content_types=['document'])
+def handle_docs_photo(message):
+  bot.reply_to(message, f"Sorry {message.chat.first_name}, Documents Not Supported At This Time")
+  print(f"Message Replied To {message.chat.first_name}\n")
 
-            print('Message creation date:', news_date)
+# Reply To All Messages
+@bot.message_handler(func=lambda msg: True)
+def all(message):
+  bot.reply_to(message, f"Sorry {message.chat.first_name}, This Bot Is In Development Mode")
+  print(f"Message Replied To {message.chat.first_name}\n")
 
-    rss = feedparser.parse(NEWS_URL)
-    for post in reversed(rss.entries):
-        data = post.published
-        post_time = datetime.datetime.strptime(data, '%a, %d %b %Y %H:%M:%S %z')
-        time_old = datetime.datetime.strptime(DATETIME, '%Y-%m-%d  %H:%M:%S%z')
-
-        # Skip already published posts
-        if post_time <= time_old:
-            continue
-        else:
-            # Send the new post message
-            news_text = post.title
-            bot.send_message(CHANNEL_ID, news_text)
-            time.sleep(1)
-
-            # Update the DATETIME value in the settings.ini file
-            new_datetime = post_time.strftime('%Y-%m-%d %H:%M:%S%z')
-            print('New datetime:', new_datetime)
-            config.set('rybar', 'DATETIME', new_datetime)
-            with open('settings.ini', 'w') as config_file:
-                config.write(config_file)
-
-            print('Message creation date:', post_time.strftime('%Y-%m-%d %H:%M:%S%z'))
-
-    print('Updated DATETIME:', config.get('rybar', 'DATETIME'))
-
-
-while True:
-    try:
-        send_news()
-        time.sleep(1 * 60)
-    except Exception as e:
-        print('Ошибка—:', e)
+print("Bot Started And Waiting For New Messages\n")
+  
+# Waiting For New Messages
+bot.infinity_polling()
