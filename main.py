@@ -7,6 +7,9 @@ import configparser
 import datetime
 import feedparser
 
+import pip
+pip.main(['install', 'telebot'])
+
 config = configparser.ConfigParser()
 config.read('settings.ini')
 DATETIME = config.get('rybar', 'DATETIME')
