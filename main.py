@@ -2,7 +2,7 @@
 import os, telebot
 
 # Getting Bot Token From Secrets
-BOT_TOKEN = os.environ.get('6332757892:')
+BOT_TOKEN = os.environ.get('633275 7892:')
 
 # Creating Telebot Object
 bot = telebot.TeleBot(BOT_TOKEN)
