@@ -4,12 +4,13 @@ import random
 import time
 import logging
 from xml.etree import ElementTree as ET
+import os
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-TELEGRAM_TOKEN = '7367711509:AAGaWd-fACcJGAVEMY79pJDF3dhjT_zKgLQ'  # Укажите ваш токен Telegram
-CHAT_ID = '@gggggggglg'  # Укажите ваш chat_id
 SAVED_NEWS_FILE = 'sent_news.json'  # Файл для сохранения отправленных новостей
 RSS_URL = 'https://habr.com/ru/rss/news/?fl=ru'
 
