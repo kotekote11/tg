@@ -1,6 +1,6 @@
 import time
 import os
-from rss-parser import Parser
+from rss_parser import Parser
 from requests import get
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.utils.markdown import hbold, hlink
