@@ -1,42 +1,44 @@
-# Importing Required Libraries, Imported os Module For Security 
-import os, telebot
+import time
+import os
+from rss_parser import Parser
+from requests import get
+from aiogram import Bot, Dispatcher, executor, types
+from aiogram.utils.markdown import hbold, hlink
+#from config import token, id_channel
+token = os.getenv("token")
+id_channel = os.getenv("id_channel")
+# создаем объект бота, которому передаем токен, а также указываем какого типа будут
+# отправляемые сообщения, создаем диспетчера, в которого передаем бота
+bot = Bot(token=token, parse_mode=types.ParseMode.HTML)
+dp = Dispatcher(bot)
 
-# Getting Bot Token From Secrets
-BOT_TOKEN = os.environ.get('633275 7892:')
 
-# Creating Telebot Object
-bot = telebot.TeleBot(BOT_TOKEN)
-
-# Whenever Starting Bot
-@bot.message_handler(commands=['start', 'hello'])
-def send_welcome(message):
+# указываем обработку диспетчером комманды start
+# создаем функцию в которой будем отправлять сообщения
+# для этого явно указываем на тип сообщений
+@dp.message_handler(commands="start")
+async def start(message: types.Message):
+    habr_title = []
   
-  # Inline Button
-  markup = telebot.types.InlineKeyboardMarkup()
-  markup.add(telebot.types.InlineKeyboardButton("Use Template", url="https://replit.com/@krbishnoi46/Python-Telegram-Bot"))
+    # запускаем бесконечный цикл, в котором будем проверять наличие новостей
+    while True:
+        if len(habr_title) >= 20:
+            habr_title = []
+        rss_url = "https://habr.com/ru/rss/news/?fl=ru"
+        xml = get(rss_url)
 
-  # Reply Keyboard Button
-  # markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=3)
-  # markup.add(telebot.types.KeyboardButton("Reply Keyboard Button"))
-  
-  markdown = f"""Hey *{message.chat.first_name}* Welcome To *KR's Python Telegram Bot Template*.\n\nYou Can Use This Template By Visiting Our Template Page From This Below Button"""
-  
-  bot.reply_to(message, markdown, parse_mode="Markdown", reply_markup=markup)
-  print(f"Welcome Message Sent To {message.chat.first_name}\n")
-
-# Handle Documents
-@bot.message_handler(func=lambda m: True, content_types=['document'])
-def handle_docs_photo(message):
-  bot.reply_to(message, f"Sorry {message.chat.first_name}, Documents Not Supported At This Time")
-  print(f"Message Replied To {message.chat.first_name}\n")
-
-# Reply To All Messages
-@bot.message_handler(func=lambda msg: True)
-def all(message):
-  bot.reply_to(message, f"Sorry {message.chat.first_name}, This Bot Is In Development Mode")
-  print(f"Message Replied To {message.chat.first_name}\n")
-
-print("Bot Started And Waiting For New Messages\n")
-  
-# Waiting For New Messages
-bot.infinity_polling()
+        parser = Parser(xml=xml.content, limit=3)
+        feed = parser.parse()
+       
+        # пробегаемся по каждой новости в цикле
+        for item in reversed(feed.feed):
+            # проверяем есть ли заголовок новости в списке
+            if not item.title in habr_title:
+                habr_title.append(item.title)
+                # отправляем сообщение
+                # await message.answer(f'{hbold(item.publish_date)}\n\n{hlink(item.title, item.link)}\n\n')
+                await bot.send_message(id_channel, f'{hbold(item.publish_date)}\n\n{hlink(item.title, item.link)}\n\n')
+        time.sleep(200)
+      # запускаем бота
+if __name__ == "__main__":
+    executor.start_polling(dp)
