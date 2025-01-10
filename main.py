@@ -1,74 +1,82 @@
 import requests
-import json
-import random
-import time
+from bs4 import BeautifulSoup
 import logging
-from xml.etree import ElementTree as ET
+import time
 import os
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+TELEGRAM_TOKEN = os.getenv("API_TOKEN")
+CHAT_ID = os.getenv("CHANNEL_ID")
+TELEGRAM_CHANNEL_URL = os.getenv("TELEGRAM_CHANNEL_URL")
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+KEYWORDS = "открытие фонтанов"
 
-# Настройка логирования
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+def clean_url(url):
+   """Очищает URL, оставляя только нужный адрес."""
+   url = url[len('/url?q='):]  # Убираем префикс
+   return url.split('&sa=U&ved')[0]  # Убираем лишние параметры
 
-SAVED_NEWS_FILE = 'sent_news.json'  # Файл для сохранения отправленных новостей
-RSS_URL = 'https://habr.com/ru/rss/news/?fl=ru'
+def fetch_telegram_links():
+   """Получает ссылки на новости из Telegram-канала."""
+   response = requests.get(TELEGRAM_CHANNEL_URL)
+   soup = BeautifulSoup(response.text, 'html.parser')
+   links = set()
+   for link in soup.find_all('a', class_='tgme_widget_message_link_preview'):
+       href = link['href']
+       links.add(href)
+   return links  # Возвращаем уникальные ссылки
 
-# Загрузка отправленных новостей из файла
-def load_sent_news():
-    try:
-        with open(SAVED_NEWS_FILE, 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
+def is_link_working(link):
+   """Проверяет доступность ссылки."""
+   try:
+       response = requests.get(link, timeout=5)
+       return response.status_code == 200
+   except requests.RequestException as e:
+       logging.warning(f'Проблема с доступом к ссылке: {link} - {e}')
+       return False
 
-# Сохранение отправленных новостей в файл
-def save_sent_news(sent_news):
-    with open(SAVED_NEWS_FILE, 'w') as f:
-        json.dump(sent_news, f)
-
-# Отправка сообщения в Telegram
 def send_telegram_message(message):
-    url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage'
-    data = {'chat_id': CHAT_ID, 'text': message, 'parse_mode': 'HTML'}
-    response = requests.post(url, data=data)
-    return response.json()
+   """Отправляет сообщение в Telegram."""
+   url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage'
+   data = {
+       'chat_id': CHAT_ID,
+       'text': message,
+       'parse_mode': 'HTML'
+   }
+   response = requests.post(url, data=data)
+   return response.json()
 
-# Получение новостей из RSS
-def get_news():
-    response = requests.get(RSS_URL)
-    return ET.fromstring(response.content)
+def search_news():
+   """Ищет новости по ключевым словам на Google."""
+   query = f'https://www.google.ru/search?q={KEYWORDS}&tbs=qdr:d'
+   response = requests.get(query)
+   soup = BeautifulSoup(response.text, 'html.parser')
+   news_items = []
+   for item in soup.find_all('h3'):
+       link = item.find_parent('a')  # Получаем родительский элемент <a>
+       if link:
+           clean_link = clean_url(link['href'])
+           title = item.get_text(strip=True)
+           news_items.append({'title': title, 'link': clean_link})
+   return news_items
 
-# Главная логика
 def main():
-    sent_news = load_sent_news()
-    all_news = get_news()
-
-    items = all_news.findall('.//item')
-    # Извлечение новостей, которых еще нет в sent_news
-    news_to_send = [item for item in items if item.find('link').text not in sent_news]
-
-    if news_to_send:
-        # Выбор случайной новости
-        selected_news = random.choice(news_to_send)
-        title = selected_news.find('title').text
-        link = selected_news.find('link').text
-        message = f'<b>{title}</b>\n{link}'
-
-        # Отправка сообщения в Telegram
-        response = send_telegram_message(message)
-        if response.get('ok'):
-            logging.info(f'Отправлено: {title}')
-            # Сохраняем отправленную новость
-            sent_news.append(link)
-            save_sent_news(sent_news)
-        else:
-            logging.error(f'Ошибка отправки: {response}')
-
-    else:
-        logging.info('Нет новых новостей для отправки')
+   """Основная логика."""
+   known_links = fetch_telegram_links()  # Получаем известные ссылки из Telegram
+   news_items = search_news()
+   logging.info(f'Найдено {len(news_items)} новостей.')
+   for news in news_items:
+       if news['link'] not in known_links and is_link_working(news['link']):  # Если ссылка новая и рабочая
+           message = f'<b>{news["title"]}</b>\n{news["link"]}'
+           response = send_telegram_message(message)
+           if response.get('ok'):
+               logging.info(f'Отправлено: {news["title"]}')
+           else:
+               logging.error(f'Ошибка отправки: {response}')
+       elif news['link'] in known_links:
+           logging.info(f'Новость уже существует в Telegram: {news["title"]}')
+       else:
+           logging.info(f'Ссылка не рабочая: {news["link"]}')
 
 if __name__ == "__main__":
-    while True:
-        main()
-        time.sleep(600)  # Подождите 200 секунд перед следующим запросом
+   while True:
+       main()
+       time.sleep(300) 
