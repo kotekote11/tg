@@ -1,15 +1,20 @@
+import os
 import logging
 import random
 import requests
 import json
 import time
 from bs4 import BeautifulSoup
-import os
 
+# Получаем токен API и ID канала из переменных окружения
 API_TOKEN = os.getenv("API_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
-GOOGLE_SEARCH_URL = 'https://www.google.ru/search?q={}'
-SENT_LIST_FILE = 'sent_news.json'  # Файл для хранения отправленных новостей
+SENT_LIST_FILE = 'google.json'  # Файл для хранения отправленных новостей
+KEYWORDS = "открытие фонтанов 2025"  # Ваши ключевые слова
+
+# Списки игнорирования
+IGNORE_WORDS = {"нефть", "недр", "месторождение"}  # Запрещенные слова
+IGNORE_SITES = {"instagram", "livejournal", "fontanka"}  # Запрещенные сайты
 
 # Настройка логирования
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -35,9 +40,10 @@ def save_sent_news(sent_news):
     with open(SENT_LIST_FILE, 'w') as file:
         json.dump(sent_news, file)
 
-def search_news(query):
+def search_news():
     """Поиск новостей на Google по заданному запросу."""
-    response = requests.get(GOOGLE_SEARCH_URL.format(query))
+    query = f'https://www.google.ru/search?q={KEYWORDS}&hl=ru'  # Поиск за последний день
+    response = requests.get(query)
     response.raise_for_status()
     
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -78,43 +84,49 @@ def send_message(text):
 
 def send_random_news():
     """Отправляет одну случайную новость в канал."""
-    keywords = "фонтан открытие"
-    news = search_news(keywords)
-
+    news = search_news()
+    
     # Загружаем уже отправленные новости
     sent_news = load_sent_news()
-    sent_titles = [item['title'] for item in sent_news]
+    sent_titles = {item['title'] for item in sent_news}  # Используем множество для более быстрой проверки
 
-    # Фильтруем новости по заголовкам
-    new_news = [item for item in news if item['title'] not in sent_titles]
+    # Фильтруем новости по заголовкам, запрещенным словам и сайтам
+    filtered_news = []
+    for item in news:
+        title = item['title']
+        link = item['link']
+        site = link.split('/')[2]  # Извлекаем домен из ссылки
 
-    if new_news:
-        random_news = random.choice(new_news)
+        # Проверяем на наличие запрещенных слов и сайтов
+
+        if title not in sent_titles and not any(word in title.lower() for word in IGNORE_WORDS) and not any(site in link for site in IGNORE_SITES):
+            filtered_news.append(item)
+
+    if filtered_news:
+        random_news = random.choice(filtered_news)
         title = random_news['title']
         link = random_news['link']
         
-        # Формируем текст сообщения с хештегом #fontan
-        message_text = f"{title}\n{link}\n\n⛲@MonitoringFontan📰#MonitoringFontan"
+        # Формируем текст сообщения с хештегами
+        message_text = f"{title}\n{link}\n⛲@MonitoringFontan📰#MonitoringFontan"
 
         # Отправка сообщения
         if send_message(message_text):
             # Сохраняем отправленную новость
-
             sent_news.append({'title': title, 'link': link})
-
             save_sent_news(sent_news)
             logging.info(f"Отправлена новость: {title}")
     else:
         logging.info("Нет новых новостей для отправки.")
 
 def cleanup_sent_news(num_of_iterations):
-    """Очищает файл, оставляя только последние 3 записи каждые 90 итераций."""
+    """Очищает файл, оставляя только последние 9 записей каждые 90 итераций."""
     if num_of_iterations % 90 == 0:
         sent_news = load_sent_news()  # Загружаем все отправленные новости
-        if len(sent_news) > 3:
-            send_news_to_keep = sent_news[-3:]  # Храним только последние 3 записи
-            save_sent_news(send_news_to_keep)  # Сохраняем их в файл
-            logging.info("Очистка старых новостей завершена, оставлены только последние 3 записи.")
+        if len(sent_news) > 9:
+            sent_news = sent_news[-9:]  # Храним только последние 9 записей
+            save_sent_news(sent_news)  # Сохраняем их в файл
+            logging.info("Очистка старых новостей завершена, оставлены только последние 9 записей.")
 
 if __name__ == '__main__':
     num_iterations = 0
