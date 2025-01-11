@@ -99,22 +99,17 @@ def send_random_news():
         # Отправка сообщения
         if send_message(message_text):
             # Сохраняем отправленную новость
+
             sent_news.append({'title': title, 'link': link})
 
-            # Поддерживаем только последние 3 записи
-
-            if len(sent_news) > 3:
-                sent_news = sent_news[-3:]
-
             save_sent_news(sent_news)
-
             logging.info(f"Отправлена новость: {title}")
     else:
         logging.info("Нет новых новостей для отправки.")
 
 def cleanup_sent_news(num_of_iterations):
-    """Очищает файл, оставляя только последние 3 записи каждые 3 итерации."""
-    if num_of_iterations % 3 == 0:
+    """Очищает файл, оставляя только последние 3 записи каждые 90 итераций."""
+    if num_of_iterations % 90 == 0:
         sent_news = load_sent_news()  # Загружаем все отправленные новости
         if len(sent_news) > 3:
             send_news_to_keep = sent_news[-3:]  # Храним только последние 3 записи
@@ -129,4 +124,4 @@ if __name__ == '__main__':
 
         cleanup_sent_news(num_iterations)  # Очищаем старые записи при необходимости
 
-        time.sleep(180)  # Пауза перед следующим запросом (3 минуты)
+        time.sleep(300)  # Пауза перед следующим запросом (5 минут)
