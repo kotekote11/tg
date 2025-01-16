@@ -1,139 +1,152 @@
 import os
-import logging
-import random
-import requests
 import json
-import time
+import logging
+import asyncio
+import random
+from aiohttp import ClientSession
 from bs4 import BeautifulSoup
 
-# Получаем токен API и ID канала из переменных окружения
+# Настройки Telegram API
 API_TOKEN = os.getenv("API_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
-SENT_LIST_FILE = 'google.json'  # Файл для хранения отправленных новостей
-KEYWORDS = "открытие фонтанов 2025"  # Ваши ключевые слова
+SENT_LIST_FILE = 'dum1p.json'
 
-# Списки игнорирования
-IGNORE_WORDS = {"нефть", "недр", "месторождение"}  # Запрещенные слова
-IGNORE_SITES = {"instagram", "livejournal", "fontanka"}  # Запрещенные сайты
+# Ключевые слова для поиска
+KEYWORDS = [
+    "открытие фонтанов 2025",
+    "открытие фонтанов 2026",
+    "открытие светомузыкального фонтана 2025",
+]
+
+# Игнорируемые слова и сайты
+IGNORE_WORDS = {"Петергоф", "нефть", "недр", "месторождение"}
+IGNORE_SITES = {"instagram", "livejournal", "fontanka"}
 
 # Настройка логирования
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG)
 
-def clean_url(url):
-    """Очищает URL от '/url?q=' и лишних параметров после '&sa=U&ved'."""
-    if url.startswith('/url?q='):
-        url = url[len('/url?q='):]
-    if '&sa=U&ved' in url:
-        url = url.split('&sa=U&ved')[0]
-    return url
-
-def load_sent_news():
-    """Загружает уже отправленные новости из файла."""
-    try:
-        with open(SENT_LIST_FILE, 'r') as file:
+# Функция для загрузки ранее отправленных сообщений из файла
+def load_sent_list():
+    if os.path.exists(SENT_LIST_FILE):
+        with open(SENT_LIST_FILE, 'r', encoding='utf-8') as file:
             return json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []  # Если файл не существует или пуст, возвращаем пустой список
+    return []
 
-def save_sent_news(sent_news):
-    """Сохраняет уже отправленные новости в файл."""
-    with open(SENT_LIST_FILE, 'w') as file:
-        json.dump(sent_news, file)
+# Функция для сохранения отправленных сообщений в файл
+def save_sent_list(sent_list):
+    with open(SENT_LIST_FILE, 'w', encoding='utf-8') as file:
+        json.dump(sent_list, file)
 
-def search_news():
-    """Поиск новостей на Google по заданному запросу."""
-    query = f'https://www.google.ru/search?q={KEYWORDS}&hl=ru'  # Поиск за последний день
-    response = requests.get(query)
-    response.raise_for_status()
-    
-    soup = BeautifulSoup(response.text, 'html.parser')
-    news = []
+# Функция для очистки URL от лишних параметров для Google
+def clean_url_google(url):
+    url = url[len('/url?q='):]
+    return url.split('&sa=U&ved')[0]
 
-    # Найдем заголовки новостей и ссылки
-    for item in soup.find_all('h3'):
-        title = item.get_text()
-        link = item.find_parent('a')['href']
-        cleaned_link = clean_url(link)
-        
-        # Проверяем, что ссылка рабочая
-        try:
-            if requests.head(cleaned_link).status_code == 200:
-                news.append({'title': title, 'link': cleaned_link})
-        except requests.exceptions.RequestException:
-            logging.warning(f"Некорректная ссылка: {cleaned_link}")
+# Функция для очистки URL от лишних параметров для Yandex
+def clean_url_yandex(url):
+    url = url[len('https://'):]  # Пример, нужно изменить на актуальный
+    return url.split('&&&&&')[0]  # Пример, нужно изменить на актуальный
 
-    logging.debug(f"Найдено новостей: {len(news)}")
-    return news
-
-def send_message(text):
-    """Отправка сообщения в канал."""
-    url = f"https://api.telegram.org/bot{API_TOKEN}/sendMessage"
+# Функция для отправки сообщения в Telegram
+async def send_message(session, message_text):
+    url = f'https://api.telegram.org/bot{API_TOKEN}/sendMessage'
     payload = {
         'chat_id': CHANNEL_ID,
-        'text': text,
-        'parse_mode': 'HTML'  # Используйте HTML для форматирования
+        'text': message_text,
+        'parse_mode': 'Markdown'
     }
-    try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        logging.info("Сообщение успешно отправлено.")
-        return True
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Ошибка отправки сообщения: {e}")
-        return False
+    async with session.post(url, json=payload) as response:
+        if response.status == 200:
+            logging.info('Сообщение успешно отправлено.')
+        else:
+            logging.error(f'Ошибка отправки сообщения: {response.status}')
 
-def send_random_news():
-    """Отправляет одну случайную новость в канал."""
-    news = search_news()
-    
-    # Загружаем уже отправленные новости
-    sent_news = load_sent_news()
-    sent_titles = {item['title'] for item in sent_news}  # Используем множество для более быстрой проверки
+# Список User-Agent для случайного выбора
+user_agents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15'
+]
 
-    # Фильтруем новости по заголовкам, запрещенным словам и сайтам
-    filtered_news = []
-    for item in news:
-        title = item['title']
-        link = item['link']
-        site = link.split('/')[2]  # Извлекаем домен из ссылки
+# Функция для поиска новостей в Google
+async def search_google(session, keyword):
+    query = f'https://www.google.ru/search?q={keyword}&hl=ru&tbs=qdr:d'
+    headers = {'User-Agent': random.choice(user_agents)}
+    async with session.get(query, headers=headers) as response:
+        if response.status != 200:
+            logging.error(f'Ошибка при обращении к Google: {response.status}')
+            return []
+        soup = BeautifulSoup(await response.text(), 'html.parser')
+        results = []
+        for item in soup.find_all('h3'):
+            parent_link = item.find_parent('a')
+            if parent_link and 'href' in parent_link.attrs:
+                link = clean_url_google(parent_link['href'])
+                results.append((item.get_text(), link))
+        return results
+# Функция для поиска новостей в Yandex
+async def search_yandex(session, keyword):
+    query = f'https://yandex.ru/search/?text={keyword}&within=77'
+    headers = {'User-Agent': random.choice(user_agents)}
+    async with session.get(query, headers=headers) as response:
+        if response.status != 200:
+            logging.error(f'Ошибка при обращении к Yandex: {response.status}')
+            return []
+        soup = BeautifulSoup(await response.text(), 'html.parser')
+        results = []
+        for item in soup.find_all('h2'):
+            parent_link = item.find_parent('a')
+            if parent_link and 'href' in parent_link.attrs:
+                link = clean_url_yandex(parent_link['href'])
+                results.append((item.get_text(), link))
+        return results
+# Функция для проверки новостей по ключевым словам
+async def check_news(sem, sent_set):
+    async with ClientSession() as session:
+        for keyword in KEYWORDS:
+            async with sem:
+                logging.info(f'Проверка новостей для: {keyword}')
+                # Получаем новости из Google и Yandex
+                news_from_google = await search_google(session, keyword)
+                news_from_yandex = await search_yandex(session, keyword)
+                # Обработка новостей Google
+                for title, link in news_from_google:
+                    if any(ignore in title for ignore in IGNORE_WORDS) or any(ignore in link for ignore in IGNORE_SITES):
+                        continue
+                    
+                    if link not in sent_set:
+                        sent_set.add(link)
+                        message_text = f"{title}\n{link}\n⛲@MonitoringFontan📰#google"
+                        await send_message(session, message_text)
 
-        # Проверяем на наличие запрещенных слов и сайтов
+                # Обработка новостей Yandex
+                for title, link in news_from_yandex:
+                    if any(ignore in title for ignore in IGNORE_WORDS) or any(ignore in link for ignore in IGNORE_SITES):
+                        continue
+                    
+                    if link not in sent_set:
+                        sent_set.add(link)
+                        message_text = f"{title}\n{link}\n⛲@MonitoringFontan📰#yandex"
+                        await send_message(session, message_text)
 
-        if title not in sent_titles and not any(word in title.lower() for word in IGNORE_WORDS) and not any(site in link for site in IGNORE_SITES):
-            filtered_news.append(item)
+                # Сохраняем отправленные ссылки после каждой проверки
+                save_sent_list(list(sent_set))
 
-    if filtered_news:
-        random_news = random.choice(filtered_news)
-        title = random_news['title']
-        link = random_news['link']
-        
-        # Формируем текст сообщения с хештегами
-        message_text = f"{title}\n{link}\n⛲@MonitoringFontan📰#MonitoringFontan"
+                # Случайная пауза между запросами
+                await asyncio.sleep(random.randint(15, 25))
 
-        # Отправка сообщения
-        if send_message(message_text):
-            # Сохраняем отправленную новость
-            sent_news.append({'title': title, 'link': link})
-            save_sent_news(sent_news)
-            logging.info(f"Отправлена новость: {title}")
-    else:
-        logging.info("Нет новых новостей для отправки.")
+# Основная функция
+async def main():
+    sem = asyncio.Semaphore(5)  # Ограничение на количество параллельных запросов
+    sent_set = set(load_sent_list())  # Загружаем уже отправленные ссылки
 
-def cleanup_sent_news(num_of_iterations):
-    """Очищает файл, оставляя только последние 9 записей каждые 90 итераций."""
-    if num_of_iterations % 90 == 0:
-        sent_news = load_sent_news()  # Загружаем все отправленные новости
-        if len(sent_news) > 9:
-            sent_news = sent_news[-9:]  # Храним только последние 9 записей
-            save_sent_news(sent_news)  # Сохраняем их в файл
-            logging.info("Очистка старых новостей завершена, оставлены только последние 9 записей.")
+    while True:
+        await check_news(sem, sent_set)  # Проверка новостей
+        await asyncio.sleep(1300)  # Проверка каждые 5 минут
 
 if __name__ == '__main__':
-    num_iterations = 0
-    while True:
-        send_random_news()  # Отправляем новости
-        num_iterations += 1
-
-        cleanup_sent_news(num_iterations)  # Очищаем старые записи при необходимости
-
-        time.sleep(300)  # Пауза перед следующим запросом (5 минут)
+    asyncio.run(main())  # Запускаем основную функцию
