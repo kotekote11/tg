@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 # Настройки Telegram API
 API_TOKEN = os.getenv("API_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
-SENT_LIST_FILE = 'dum21p.json'
+SENT_LIST_FILE = 'du3m21p.json'
 
 # Ключевые слова для поиска
 KEYWORDS = [
