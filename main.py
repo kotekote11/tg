@@ -74,7 +74,7 @@ user_agents = [
 
 # Функция для поиска новостей в Google
 async def search_google(session, keyword):
-    query = f'https://www.google.ru/search?q={keyword}&hl=ru&tbs=qdr:d'
+    query = f'https://yandex.ru/search/?text={keyword}'
     headers = {'User-Agent': random.choice(user_agents)}
     async with session.get(query, headers=headers) as response:
         if response.status != 200:
