@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 # Настройки Telegram API
 API_TOKEN = os.getenv("API_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
-SENT_LIST_FILE = 'du3m21p.json'
+SENT_LIST_FILE = 'du32m21p.json'
 
 # Ключевые слова для поиска
 KEYWORDS = [
@@ -39,8 +39,8 @@ def save_sent_list(sent_list):
 
 # Функция для очистки URL от лишних параметров для Google
 def clean_url_google(url):
-    url = url[len('/url?q='):]
-    return url.split('&sa=U&ved')[0]
+    url = url[len('&&&&&='):]
+    return url.split('&&&&&d')[0]
 
 # Функция для очистки URL от лишних параметров для Yandex
 def clean_url_yandex(url):
