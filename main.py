@@ -57,7 +57,7 @@ user_agents = [
 ]
 async def search_google(session, keyword):
     """Выполняет поиск по Google."""
-    query = f'https://www.google.ru/search?q={keyword}&hl=ru&tbs=qdr:d'
+    query = f'https://www.google.ru/search?q={keyword}'
     headers = {'User-Agent': random.choice(user_agents)}
     async with session.get(query, headers=headers) as response:
         if response.status != 200:
@@ -73,7 +73,7 @@ async def search_google(session, keyword):
         return results
 async def search_yandex(session, keyword):
     """Выполняет поиск по Яндексу."""
-    query = f'https://yandex.ru/search/?text={keyword}&within=77'
+    query = f'https://yandex.ru/search/?text={keyword}'
     headers = {'User-Agent': random.choice(user_agents)}
     async with session.get(query, headers=headers) as response:
         if response.status != 200:
