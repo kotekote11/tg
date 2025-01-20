@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 # Настройки Telegram API
 API_TOKEN = os.getenv("API_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
-SENT_LIST_FILE = 'dum1p.json'
+SENT_LIST_FILE = 'dump.json'
 
 # Ключевые слова для поиска
 KEYWORDS = [
@@ -20,7 +20,7 @@ KEYWORDS = [
 
 # Игнорируемые слова и сайты
 IGNORE_WORDS = {"Петергоф", "нефть", "недр", "месторождение"}
-IGNORE_SITES = {"instagram", "livejournal", "fontanka"}
+IGNORE_SITES = {"instagram", "livejournal", "fontanka", "avito"}
 
 # Настройка логирования
 logging.basicConfig(level=logging.DEBUG)
@@ -88,6 +88,7 @@ async def search_google(session, keyword):
                 link = clean_url_google(parent_link['href'])
                 results.append((item.get_text(), link))
         return results
+
 # Функция для поиска новостей в Yandex
 async def search_yandex(session, keyword):
     query = f'https://yandex.ru/search/?text={keyword}&within=77'
@@ -98,55 +99,45 @@ async def search_yandex(session, keyword):
             return []
         soup = BeautifulSoup(await response.text(), 'html.parser')
         results = []
-        for item in soup.find_all('h2'):
+        for item in soup.find_all('h3'):
             parent_link = item.find_parent('a')
             if parent_link and 'href' in parent_link.attrs:
                 link = clean_url_yandex(parent_link['href'])
                 results.append((item.get_text(), link))
         return results
-# Функция для проверки новостей по ключевым словам
-async def check_news(sem, sent_set):
-    async with ClientSession() as session:
-        for keyword in KEYWORDS:
-            async with sem:
-                logging.info(f'Проверка новостей для: {keyword}')
-                # Получаем новости из Google и Yandex
-                news_from_google = await search_google(session, keyword)
-                news_from_yandex = await search_yandex(session, keyword)
-                # Обработка новостей Google
-                for title, link in news_from_google:
-                    if any(ignore in title for ignore in IGNORE_WORDS) or any(ignore in link for ignore in IGNORE_SITES):
-                        continue
-                    
-                    if link not in sent_set:
-                        sent_set.add(link)
-                        message_text = f"{title}\n{link}\n⛲@MonitoringFontan📰#google"
-                        await send_message(session, message_text)
 
-                # Обработка новостей Yandex
-                for title, link in news_from_yandex:
-                    if any(ignore in title for ignore in IGNORE_WORDS) or any(ignore in link for ignore in IGNORE_SITES):
-                        continue
-                    
-                    if link not in sent_set:
-                        sent_set.add(link)
-                        message_text = f"{title}\n{link}\n⛲@MonitoringFontan📰#yandex"
-                        await send_message(session, message_text)
-
-                # Сохраняем отправленные ссылки после каждой проверки
-                save_sent_list(list(sent_set))
-
-                # Случайная пауза между запросами
-                await asyncio.sleep(random.randint(15, 25))
-
-# Основная функция
 async def main():
-    sem = asyncio.Semaphore(5)  # Ограничение на количество параллельных запросов
-    sent_set = set(load_sent_list())  # Загружаем уже отправленные ссылки
+    sent_set = set(load_sent_list())
+    
+    tasks = []
+    for keyword in KEYWORDS:
+        task = asyncio.create_task(search_google(session, keyword))
+        tasks.append(task)
+        task = asyncio.create_task(search_yandex(session, keyword))
+        tasks.append(task)
+    
+    responses = await asyncio.gather(*tasks)
+    
+    for response in responses:
+        for title, link in response:
+            if not any(word in title for word in IGNORE_WORDS) \
+               and link not in IGNORE_SITES:
+                
+                if (title, link) not in sent_set:
+                    if "google" in link:
+                        message_text = f"{title}\n{link}\n⛲@MonitoringFontan📰#google"
+                    elif "yandex" in link:
+                        message_text = f"{title}\n{link}\n⛲@MonitoringFontan📰#yandex"
+                    else:
+                        continue
+                    
+                    await send_message(session, message_text)
+                    sent_set.add((title, link))
+                    await asyncio.sleep(random.randint(5, 15))
+                    
+    save_sent_list(sent_set)
 
-    while True:
-        await check_news(sem, sent_set)  # Проверка новостей
-        await asyncio.sleep(1300)  # Проверка каждые 5 минут
-
-if __name__ == '__main__':
-    asyncio.run(main())  # Запускаем основную функцию
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
+    loop.close()
