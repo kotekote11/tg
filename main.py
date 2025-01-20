@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 # Настройки Telegram API
 API_TOKEN = os.getenv("API_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
-SENT_LIST_FILE = 'du32m21p.json'
+SENT_LIST_FILE = 'dum1p.json'
 
 # Ключевые слова для поиска
 KEYWORDS = [
@@ -39,12 +39,12 @@ def save_sent_list(sent_list):
 
 # Функция для очистки URL от лишних параметров для Google
 def clean_url_google(url):
-    url = url[len('&&&&&='):]
-    return url.split('&&&&&d')[0]
+    url = url[len('/url?q='):]
+    return url.split('&sa=U&ved')[0]
 
 # Функция для очистки URL от лишних параметров для Yandex
 def clean_url_yandex(url):
-    url = url[len('&&&&&&&&'):]  # Пример, нужно изменить на актуальный
+    url = url[len('https://'):]  # Пример, нужно изменить на актуальный
     return url.split('&&&&&')[0]  # Пример, нужно изменить на актуальный
 
 # Функция для отправки сообщения в Telegram
@@ -74,7 +74,7 @@ user_agents = [
 
 # Функция для поиска новостей в Google
 async def search_google(session, keyword):
-    query = f'https://yandex.ru/search/?text={keyword}'
+    query = f'https://www.google.ru/search?q={keyword}&hl=ru&tbs=qdr:d'
     headers = {'User-Agent': random.choice(user_agents)}
     async with session.get(query, headers=headers) as response:
         if response.status != 200:
