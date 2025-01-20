@@ -111,6 +111,7 @@ async def main():
                         await asyncio.sleep(random.randint(5, 15))
     save_sent_list(list(sent_set))
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     loop.run_until_complete(main())
     loop.close()
